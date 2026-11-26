@@ -7,8 +7,12 @@
     "observe\\.invalid",
     "X-Axiom-Dataset",
     "t3code\\.analytics\\.device-id",
+    "t3code:analytics-device-id",
     "expo-observe",
-    "getTelemetryIdentity\\(\\)",
+    "\\bgetTelemetryIdentity\\b",
+    "VITE_RELAY_OTLP_TRACES_",
+    "EXPO_PUBLIC_OTLP_",
+    "T3CODE_RELAY_CLIENT_OTLP_",
     "userdata/anonymous-id"
   ],
   "forbiddenBuiltPatterns": [
@@ -17,7 +21,13 @@
     "xaat-",
     "X-Axiom-Dataset",
     "/v1/traces",
+    "/v1/mobile/observe",
+    "observe\\.invalid",
     "/api/observability/v1/traces",
-    "t3code\\.analytics\\.device-id"
+    "t3code\\.analytics\\.device-id",
+    "t3code:analytics-device-id",
+    "VITE_RELAY_OTLP_TRACES_",
+    "EXPO_PUBLIC_OTLP_",
+    "T3CODE_RELAY_CLIENT_OTLP_"
   ]
 }

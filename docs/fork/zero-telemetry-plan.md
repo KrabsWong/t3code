@@ -2,18 +2,18 @@
 
 ## 0. 文档状态
 
-本文件基于当前 `main` 基线 `4c8a324e8fec28fe5f2c34a8a3551078d5aa5dc6`，由 4 个并行 subagent 与主代理交叉复核后重写。旧版中的所有过时状态、内部矛盾和过度承诺已删除。
+本文件基于 `main` 基线 `4c8a324e8fec28fe5f2c34a8a3551078d5aa5dc6`，由 4 个并行 subagent 与主代理交叉复核后重写，随后 fork 已 rebase 到 upstream `b8ef0600d5`。
 
-该 fork 基线以 `4c8a324e8fec28fe5f2c34a8a3551078d5aa5dc6` 为基础，已纳入以下内容：
+该 fork 基线以 `4c8a324e8fec28fe5f2c34a8a3551078d5aa5dc6` 为基础，现已 rebase 到 upstream `b8ef0600d5`，并纳入以下内容：
 
 - feedback 入口禁用涉及 5 个源码/测试文件。
 - rebase 守卫资产：`.githooks/post-rewrite`、`fork/no-telemetry-guard.json`、`scripts/no-telemetry-guard.mjs`、`scripts/rebase-upstream.sh` 和 `package.json` script。
 - 本文件作为 fork 活文档随代码维护。
-- 已落地内容是 feedback 的最低成本禁用和 rebase 守卫初版。
-- Phase 1–4、Phase 6 尚未实施。
+- 已落地内容：feedback 的最低成本禁用、rebase 守卫、守卫假阳性/假阴性修复、Phase 1 产品分析 no-op。
+- Phase 2–4、Phase 5 收口项、Phase 6 尚未实施。
 - 本机缺少 `vp` 和 `node_modules`，未运行测试、typecheck 或构建；Node 版本也与 `package.json` 要求不一致。
 
-本轮结论：**技术路线可行，但当前文档、guard 和状态描述不能直接当作已完成方案验收。进入 Phase 1 前，先修本文件列出的守卫缺口。**
+本轮结论：**技术路线可行；Phase 1 已完成静态验收。后续每完成一个 Phase，都应更新本文件并运行 guard。**
 
 ## 1. 目标与边界
 
@@ -75,15 +75,15 @@ git fetch upstream
 
 **验收**：`git status --short` 干净；`upstream/main` 可访问；guard 默认检查通过。
 
-### Phase 1：服务端产品分析 no-op
+### Phase 1：服务端产品分析 no-op（已完成）
 
 1. 修改 `apps/server/src/telemetry/AnalyticsService.ts`：
    - 保留 `AnalyticsService` class、Service 接口和 `type TelemetryOwner` import。
    - 删除 `TelemetryEnvConfig`、`make()`、`getTelemetryIdentity` 调用、HTTP payload、buffer/retry/flush、OS/架构映射。
    - `layer = Layer.succeed(AnalyticsService, AnalyticsService.of({ record: () => Effect.succeed(false), flush: Effect.void, recordOwners: () => Effect.void }))`。
 2. 删除 `apps/server/src/serverRuntimeStartup.ts:178` 的 `recordOwners(getServerOwners(...))`。
-3. 保留其他 `analytics.record()` 调用点，它们通过 no-op 接口继续编译。
-4. 重写或删除依赖投递/身份的测试：`AnalyticsService.test.ts`、`Identify.test.ts`、`ws.test.ts` 中 mock 部分；`ProviderUsageAnalytics.test.ts` 使用 mock 的项目通常无需改。
+3. `Identify.ts` 已缩减为仅保留 owner 类型，删除匿名 ID 读写实现和对应测试。
+4. 保留其他 `analytics.record()` 调用点，它们通过 no-op 接口继续编译；`ProviderUsageAnalytics` 等 mock 测试不受影响。
 
 **验收**：全新 home 无 `anonymous-id`；无 `/batch/` POST；相关测试通过。
 
@@ -187,20 +187,28 @@ git fetch upstream
 - `.githooks/post-rewrite`：rebase/amend 成功后运行 guard；`core.hooksPath=.githooks` 已在本机启用。
 - `package.json`：`npm run verify:no-telemetry`。
 
-当前实测：默认 profile 为 `5 PASS / 7 TODO`，strict 按预期失败。其中 `client-owner-params-removed-direct` 的 PASS 是假阳性。
+当前实测：
 
-### 4.2 必须修正的守卫问题
+- 默认 profile：feedback 4 项与 Phase 1 两项 PASS，Phase 2–4 与全局扫描为 TODO。
+- strict profile：Phase 1 两项已 PASS；其余 Phase 仍按预期失败。
+- `--dist`：无构建产物时会失败，避免空扫描伪 PASS。
 
-1. `resolver.ts` 断言只查小写 `clientOwner/clientDevice`，但源码使用 `ClientOwnerParams`、`readClientOwnerParams`、`owners`。必须检查这些符号及 `appendClientConnectionParams` 实参个数。
-2. remote 检查的 `/clientDevice/` 会误伤 `clientDeviceType/clientDeviceModel`，应改为词边界或精确 query key。
-3. 全局 source scan 包含 `apps/packages/infra`，会扫到 relay 契约和基础设施中的 `expo-observe`、`/v1/mobile/observe`、`X-Axiom-Dataset`。应界定为“客户端运行时扫描”，或把 relay 清理纳入 Phase 4。
-4. `--dist` 当前目录不存在也会 PASS，且不含 mobile/native/CLI asset/source map。必须要求至少一个预期产物存在，否则失败；扩展扫描路径。
-5. `post-rewrite` 和当前 wrapper 都是**事后检测**，不是阻断：失败不会撤销已完成的 rebase；Git 也可能忽略 hook 退出码。真正阻断应放到 CI、pre-push 或 wrapper 的显式恢复流程。
-6. 默认 guard 非 strict，只保护 feedback。所有 Phase 完成后必须设置 `strict: true`，并让 wrapper/CI 使用 strict。
-7. `post-rewrite` 不覆盖 merge、cherry-pick、reset、filter-repo、no-op rebase 和冲突中止。文档不得称其“保证任何同步后都触发”。
-8. `rebase-upstream.sh` 在缺少 `upstream` remote 时回退到 `origin`；fork 场景必须显式添加 `upstream` 或用 `UPSTREAM_REMOTE` 指定。
+### 4.2 已修正的守卫问题
 
-### 4.3 修正后的定位
+1. `resolver.ts` 断言已改为检查 `ClientOwnerParams`、`readClientOwnerParams` 和 `owners`。
+2. remote 检查已改为词边界，避免误伤 `clientDeviceType/clientDeviceModel`。
+3. 禁止模式已补齐 Web 冒号 analytics key、trace 构建变量与 Axiom 默认 URL。
+4. `--dist` 已改为显式强制检查；无产物时整体失败，并要求至少一个产物目录存在且文件非空。真实构建后仍需复核 native/source map 覆盖。
+5. `upstream` remote 已添加；wrapper 缺少目标 remote 时直接失败，不再回退到 fork 的 `origin`。
+
+### 4.3 仍需解决的守卫限制
+
+1. `post-rewrite` 和 wrapper 仍是**事后检测**，不是阻断：失败不会撤销 rebase，Git 也可能忽略 hook 退出码。真正阻断要放到 CI、pre-push 或 wrapper 的显式恢复流程。
+2. 默认 guard 仍非 strict。所有 Phase 完成后必须设置 `strict: true`，并让 wrapper/CI 使用 strict。
+3. `post-rewrite` 不覆盖 merge、cherry-pick、reset、filter-repo、no-op rebase 和冲突中止。
+4. 全局 source scan 仍保留 relay 契约/基础设施；strict 最终通过前，要么清理这些路径，要么把检查限定为客户端运行时。
+
+### 4.4 修正后的定位
 
 当前机制只能称为：**rebase 成功后的自动检测和告警**。在完成上述修正、启用 strict，并增加 CI/pre-push 阻断后，才能称为“防止 fork 不变量回退”。
 
@@ -247,7 +255,6 @@ T3CODE_RELAY_CLIENT_OTLP_
 
 ```sh
 vp test run apps/server/src/telemetry/AnalyticsService.test.ts
-vp test run apps/server/src/telemetry/Identify.test.ts
 vp test run apps/server/src/feedback/FeedbackService.test.ts
 vp test run apps/server/src/mcp/McpHttpServer.test.ts
 vp test run apps/server/src/cli/feedback.test.ts
@@ -277,13 +284,12 @@ vp run check:changed
 
 ## 7. 推荐执行顺序
 
-1. 修正 guard 的 resolver、词边界、scan scope、dist 和 strict 接入。
-2. Phase 1，立即做一次 upstream rebase 演练，观察真实冲突。
-3. Phase 2，再 rebase 验证一次。
-4. Phase 3，再 rebase 验证一次。
-5. Phase 4，构建并抓包验证移动端。
-6. Phase 5 收口 feedback 有效配置和 provider 指令。
-7. Phase 6，文档/配置清理，启用 strict guard。
+1. Phase 2，完成后 rebase 验证一次。
+2. Phase 3，完成后 rebase 验证一次。
+3. Phase 4，构建并抓包验证移动端。
+4. Phase 5 收口 feedback 有效配置和 provider 指令。
+5. Phase 6，文档/配置清理，启用 strict guard。
+6. 把 strict guard 接入 CI/pre-push，形成真正阻断。
 
 最小可信里程碑：
 

@@ -72,9 +72,20 @@ const literalScan = (dirs, patterns) => () => {
 
 const builtScan = () => {
   const patterns = config.forbiddenBuiltPatterns.map((pattern) => new RegExp(pattern, "g"));
-  const dirs = ["apps/web/dist", "apps/server/dist", "apps/desktop/dist", "apps/desktop/dist-electron"];
+  const dirs = [
+    "apps/web/dist",
+    "apps/server/dist",
+    "apps/server/dist-exe",
+    "apps/desktop/dist",
+    "apps/desktop/dist-electron",
+    "apps/mobile/dist",
+    "apps/marketing/dist",
+  ];
+  const present = dirs.filter((dir) => fs.existsSync(path.join(root, dir)));
+  if (present.length === 0) return ["no build artifact directory found; run --dist after a build"];
   const issues = [];
-  for (const dir of dirs) {
+  let scanned = 0;
+  for (const dir of present) {
     const full = path.join(root, dir);
     if (!fs.existsSync(full)) continue;
     const entries = [];
@@ -86,6 +97,7 @@ const builtScan = () => {
       }
     };
     visit(full);
+    scanned += entries.length;
     for (const entry of entries) {
       const content = fs.readFileSync(entry, "utf8");
       for (const regex of patterns) {
@@ -94,6 +106,7 @@ const builtScan = () => {
       }
     }
   }
+  if (scanned === 0) return ["build artifact directories are empty; run --dist after a build"];
   return issues;
 };
 
@@ -149,7 +162,7 @@ const checks = [
       "analytics-service-no-op",
       "planned",
       "apps/server/src/telemetry/AnalyticsService.ts",
-      [/\blayer\s*=\s*Layer\.succeed\(AnalyticsService/u],
+      [/\blayer\s*=\s*Layer\.succeed\(\s*AnalyticsService/u],
       [/\bgetTelemetryIdentity\b/u, /HttpClientRequest\.post/u, /T3CODE_TELEMETRY_KEY/u, /ingest\.t3\.codes/u],
     ),
   },
@@ -172,7 +185,7 @@ const checks = [
       "planned",
       "packages/client-runtime/src/authorization/remote.ts",
       [],
-      [/readClientOwnerParams/u, /clientOwner/u, /clientDevice/u],
+      [/readClientOwnerParams/u, /\bclientOwner\b/u, /\bclientDevice\b/u],
     ),
   },
   {
@@ -183,7 +196,7 @@ const checks = [
       "planned",
       "packages/client-runtime/src/connection/resolver.ts",
       [],
-      [/clientOwner/u, /clientDevice/u],
+      [/ClientOwnerParams/u, /readClientOwnerParams/u, /\bowners\b/u],
     ),
   },
   {
@@ -227,7 +240,7 @@ const checks = [
 ];
 
 if (scanDist) {
-  checks.push({ id: "no-forbidden-built-literals", phase: "planned", run: builtScan });
+  checks.push({ id: "no-forbidden-built-literals", phase: "current", run: builtScan });
 }
 
 const failed = [];

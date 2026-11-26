@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if git remote get-url upstream >/dev/null 2>&1; then
-  REMOTE="${UPSTREAM_REMOTE:-upstream}"
-else
-  REMOTE="${UPSTREAM_REMOTE:-origin}"
+REMOTE="${UPSTREAM_REMOTE:-upstream}"
+if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
+  echo "[no-telemetry] remote '$REMOTE' is missing; add it or set UPSTREAM_REMOTE." >&2
+  exit 2
 fi
 BRANCH="${UPSTREAM_BRANCH:-main}"
 
