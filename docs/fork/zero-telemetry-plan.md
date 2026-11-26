@@ -299,3 +299,111 @@ vp run check:changed
 - Phase 4：移动端 SDK、默认开关和 native 通道消失。
 - Phase 5：feedback 新入口、CLI、MCP、模型指令均不可用。
 - Phase 6：strict guard 与构建产物扫描可作为发布门槛。
+
+## 8. 本地启动与 iOS 构建 runbook
+
+### 8.1 前置条件
+
+本仓库使用 Vite+ 提供固定 Node 版本。首次开发前：
+
+```sh
+curl -fsSL https://vite.plus | bash
+vp i
+```
+
+`vp` 会按 `package.json` 的 `engines` 提供 Node；不要直接用系统 Node 替代。当前 fork 机器若缺少 `vp` 或 `node_modules`，应先完成上述安装，再运行任何 `vp` 命令。
+
+本机测试只需 host 机器能运行 coding provider。T3 Connect 在新 clone 中默认关闭；LAN、Tailscale 或 Cloudflare Tunnel 直连不要求 Clerk/relay。
+
+### 8.2 本地启动 server + web
+
+从仓库根目录运行：
+
+```sh
+vp run dev
+```
+
+打开终端输出的 **pairing URL**，不要直接打开裸的 `localhost` 地址。新浏览器 profile 需要先通过 pairing URL 完成认证。
+
+分开启动：
+
+```sh
+vp run dev:server
+vp run dev:web
+```
+
+桌面端开发：
+
+```sh
+vp run dev:desktop
+```
+
+本地开发不要设置 `VITE_HTTP_URL` 或 `VITE_WS_URL`。Vite 通过同源代理处理 `/api`、`/ws`、`/oauth`；设置这些变量会把 localhost 烘进 bundle，并破坏远程浏览器。
+
+每次同步或改动后运行当前 profile：
+
+```sh
+npm run verify:no-telemetry
+```
+
+`--strict --dist` 在 Phase 2–6 完成且构建产物存在前会失败，这是预期状态。
+
+### 8.3 iOS 从源码构建
+
+iOS 使用原生模块，不能用 Expo Go。以下命令默认从 `apps/mobile` 目录运行：
+
+```sh
+cd apps/mobile
+
+# 安装与当前 checkout fingerprint 匹配的 dev client 到模拟器或真机
+vp run mobile:install ios [simulator-udid]
+
+# 启动 Metro
+vp run dev:client
+
+# 本地 dev build
+vp run ios:dev
+
+# 不依赖 Metro 的自包含 release build
+vp run ios:release
+```
+
+构建和测试 iOS app 需要 macOS + Xcode 或等价 macOS CI runner。代码编辑可以远程完成，但模拟器、签名和打包仍发生在 macOS 环境。
+
+没有 Apple Developer Program 时可使用 Personal Team，但会缺少 widget、share extension、push entitlement 和 Sign in with Apple entitlement：
+
+```sh
+T3CODE_IOS_PERSONAL_TEAM=1 \
+T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code.dev \
+vp run ios:dev
+```
+
+修改 native 依赖、config plugin 或 patch 后需要重新生成/安装 native client；只有 JS/TS 改动可由 Metro Fast Refresh 加载。
+
+### 8.4 iOS 连接本 fork 的 host
+
+这个 fork 的私有部署应优先使用直接配对：
+
+1. host 运行 `vp run dev`、`t3 up --lan`，或暴露 Tailscale HTTPS / Cloudflare Tunnel。
+2. iOS app 扫描 host 输出的 pairing URL 或通过刚配对的连接选择该环境。
+3. 不要求登录官方 T3 Connect，也不需要官方 hosted web。
+
+如果未来要自行编译带私有 relay 配置的客户端，相关值会在构建期写入 app config，需通过 EAS environment variables 提供：
+
+```sh
+T3CODE_CLERK_PUBLISHABLE_KEY=<your-key>
+T3CODE_CLERK_JWT_TEMPLATE=<your-template>
+T3CODE_RELAY_URL=https://relay.example.com
+vp run eas:ios:preview
+```
+
+仅做 LAN/Tailscale/Tunnel 直连时，不需要配置这些 T3 Connect 变量。
+
+### 8.5 构建后验证
+
+1. 确认全新安装 app 的 Diagnostics 页面没有 crash report / connection trace 开关。
+2. 冷启动、解锁、触发一次错误后用系统代理或抓包工具检查，确认无 mobile observe / Axiom / OTLP 请求。
+3. 用配对 URL 连接 host，发送一条消息，确认 iOS 作为 remote control 可用。
+4. 重新运行 `npm run verify:no-telemetry`。
+
+静态扫描不能替代 native 产物和运行时抓包验证；Phase 4 完成后这一条是必做验收。
