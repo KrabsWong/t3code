@@ -236,12 +236,8 @@ export const hiddenWhileLinksOff = (): boolean => {
   return scope?.linkedEnvironments !== false;
 };
 
-/** `McpSchema.EnabledWhen` for agent feedback tools, for every client including `t3 feedback`. */
-export const hiddenWhileFeedbackOff = (): boolean => {
-  const fiber = Fiber.getCurrent();
-  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
-  return scope?.agentFeedback !== undefined && scope.agentFeedback !== "off";
-};
+/** Fork: agent feedback is unavailable in every session. */
+export const hiddenWhileFeedbackOff = (): boolean => false;
 
 /** `McpSchema.EnabledWhen` for workflow event types: outside clients only, while Workflows is on. */
 export const hiddenUnlessWorkflowEvents = (): boolean => {

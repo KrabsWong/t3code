@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[no-telemetry] verifying fork invariants after $1..."
+if ! node scripts/no-telemetry-guard.mjs; then
+  echo "[no-telemetry] fork invariants failed; rebase/amend completed but must be fixed." >&2
+  exit 1
+fi

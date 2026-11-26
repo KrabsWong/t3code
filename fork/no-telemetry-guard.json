@@ -1,0 +1,23 @@
+{
+  "strict": false,
+  "forbiddenSourcePatterns": [
+    "ingest\\.t3\\.codes",
+    "api\\.axiom\\.co",
+    "/v1/mobile/observe",
+    "observe\\.invalid",
+    "X-Axiom-Dataset",
+    "t3code\\.analytics\\.device-id",
+    "expo-observe",
+    "getTelemetryIdentity\\(\\)",
+    "userdata/anonymous-id"
+  ],
+  "forbiddenBuiltPatterns": [
+    "ingest\\.t3\\.codes",
+    "api\\.axiom\\.co",
+    "xaat-",
+    "X-Axiom-Dataset",
+    "/v1/traces",
+    "/api/observability/v1/traces",
+    "t3code\\.analytics\\.device-id"
+  ]
+}
